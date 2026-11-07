@@ -3,6 +3,10 @@
 The official agent Skill for [DeepFlow](https://deepflow.app) — a deploy
 platform where you decide when your app ships.
 
+`SKILL.md` is portable: it works with any AI agent that loads skills from a
+directory, not only OpenCode. The installer ships it to the standard OpenCode,
+Claude Code, and Agents locations; use `--dir` for any other agent.
+
 The Skill teaches an AI agent how to work with DeepFlow through its public API:
 
 - inspect projects, services, repositories, branches, commits, and releases;
@@ -24,15 +28,15 @@ The Skill teaches an AI agent how to work with DeepFlow through its public API:
 curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/main/install.sh | bash
 ```
 
-The installer adds the Skill to the global OpenCode directory and, when they
-already exist, to the Claude Code and Agents compatibility directories. It does
-not modify agent configuration.
+The installer adds the Skill to every supported global directory:
+`~/.config/opencode/skills/deepflow`, `~/.claude/skills/deepflow`, and
+`~/.agents/skills/deepflow`. It does not modify agent configuration.
 
 ### Install options
 
 | Command | Installs into |
 | --- | --- |
-| `curl -fsSL …/install.sh \| bash` | `~/.config/opencode/skills/deepflow`, plus existing `~/.claude/skills` or `~/.agents/skills` |
+| `curl -fsSL …/install.sh \| bash` | all three global directories below |
 | `curl -fsSL …/install.sh \| bash -s -- --opencode` | `~/.config/opencode/skills/deepflow` |
 | `curl -fsSL …/install.sh \| bash -s -- --claude` | `~/.claude/skills/deepflow` |
 | `curl -fsSL …/install.sh \| bash -s -- --agents` | `~/.agents/skills/deepflow` |
@@ -53,14 +57,33 @@ cd deep-flow-skill
 
 Run `./install.sh --help` to list every flag.
 
+### Other agents
+
+Any agent that reads a `SKILL.md` from a skills directory can use the Skill.
+Point the installer at that directory:
+
+```sh
+./install.sh --dir /path/to/agent/skills
+```
+
+Or copy the files manually:
+
+```sh
+mkdir -p /path/to/agent/skills/deepflow
+cp SKILL.md /path/to/agent/skills/deepflow/
+cp -R references /path/to/agent/skills/deepflow/
+```
+
 ## Verify
 
 ```sh
 ls ~/.config/opencode/skills/deepflow/SKILL.md
 ```
 
-The skill ID is `deepflow`. After installing, reload your agent or start a new
-session and check that `deepflow` appears in the available skills.
+The skill ID is `deepflow` in every location. After installing, reload your
+agent or start a new session and check that `deepflow` appears in the available
+skills. If you installed for another agent, confirm the files in that agent's
+skills directory instead.
 
 ## Give the agent access
 

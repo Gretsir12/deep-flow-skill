@@ -32,9 +32,9 @@ Options:
   --dir <path>     Install into <path>/deepflow
   -h, --help       Show this help
 
-Without options, the installer adds the Skill to the global OpenCode
-directory and also to ~/.claude/skills or ~/.agents/skills when those
-directories already exist.
+Without options, the installer adds the Skill to every supported global
+location: ~/.config/opencode/skills, ~/.claude/skills, and ~/.agents/skills.
+Use --dir to target any other agent's skills directory.
 
 Examples:
   curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/main/install.sh | bash
@@ -150,13 +150,7 @@ if [[ "$PROJECT_INSTALL" -eq 1 ]]; then
 fi
 
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  TARGETS=("opencode")
-  if [[ -d "$HOME/.claude" ]]; then
-    TARGETS+=("claude")
-  fi
-  if [[ -d "$HOME/.agents" ]]; then
-    TARGETS+=("agents")
-  fi
+  TARGETS=("opencode" "claude" "agents")
 fi
 
 for target in "${TARGETS[@]}"; do
