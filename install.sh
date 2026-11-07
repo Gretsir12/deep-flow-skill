@@ -122,6 +122,11 @@ install_skill() {
     cp -R "$SOURCE_DIR/references" "$dest/references"
   fi
 
+  if [[ -d "$SOURCE_DIR/scripts" ]]; then
+    cp -R "$SOURCE_DIR/scripts" "$dest/scripts"
+    chmod +x "$dest/scripts/"*.sh 2>/dev/null || true
+  fi
+
   printf 'Installed %s -> %s\n' "$SKILL_ID" "$dest"
 }
 

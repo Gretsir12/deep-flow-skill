@@ -19,7 +19,11 @@ projectID, `{s}` = serviceID, `{d}` = deployID.
 - **404 = «не найдено или чужое»** — платформа намеренно не различает
   эти случаи.
 - **Времена** — RFC 3339 (UTC/Z).
-- **Пагинация** git-списков: `?page=1&per_page=20` (per_page ≤ 100).
+- **Пагинация** git-списков: `?page=1&per_page=20`; `page` начинается с 1,
+  `per_page` — 1..100 (по умолчанию 20 в публичном API и 30 у внутреннего
+  `/git/...`). Ответ — обычный массив без метаданных: следующая страница —
+  `page + 1`; если элементов меньше `per_page`, страниц больше нет.
+  Некорректные `page`/`per_page` в публичном API заменяются умолчаниями.
 
 ## Rights/scope — что даёт право
 
@@ -120,14 +124,16 @@ GET  /apikeys/{keyID}/events?limit=50 — журнал ключа (limit ≤ 200
 {"provider": "github", "repo": "octocat/shop-web", "branch": "main"}
 ```
 
-`GET …/repository/branches?page=1&per_page=20` → `200 [Branch]`:
+`GET …/repository/branches?page=1&per_page=20` → `200 [Branch]`
+(страница; следующая — `page + 1`):
 
 ```json
 [{"name": "main", "commit_sha": "e2f3c15c"}, {"name": "fix/logs"}]
 ```
 
-`GET …/repository/commits?page=1&per_page=20` → `200 [Commit]`
-(новые первыми):
+`GET …/repository/commits?branch=main&page=1&per_page=20` → `200 [Commit]`
+(новые первыми; без `branch` — ветка из привязки репозитория; страница,
+следующая — `page + 1`):
 
 ```json
 [{"sha": "e2f3c15c1a4c0c5cfd1a10a55c1ba7e9db11e911",
@@ -227,13 +233,14 @@ POST /public/projects/{p}/services/{s}/deployments
 Тело:
 
 ```json
-{"commit_sha": "e2f3c15c1a4c0c5cfd1a10a55c1ba7e9db11e911", "port": 0}
+{"commit_sha": "e2f3c15c1a4c0c5cfd1a10a55c1ba7e9db11e911"}
 ```
 
 - `commit_sha`: 7..64 hex-символа (обычно полный 40-символьный SHA).
   Не «latest», не имя ветки.
-- `port`: опционально; только когда Analyzer просил уточнить порт
-  (пользовательский Dockerfile без EXPOSE). 0..65535.
+- `port`: необязателен. Analyzer определяет порт из сгенерированного
+  Dockerfile, иначе используется 8080; явное значение 1..65535
+  переопределяет определённый порт.
 
 Ответ — `202 Accepted`, деплой в очереди:
 

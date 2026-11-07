@@ -45,13 +45,96 @@ GitHub/GitLab, описывает проект (сервисы), DeepFlow ана
 Authorization: Bearer dfk_<43 символа>
 ```
 
-- Ключ создаёт **пользователь** в своём DeepFlow (`POST /api/v1/apikeys`,
-  см. references/api-schemas.md, раздел «Управление ключами»). Секрет
-  показывается один раз; агент получает готовый токен (например, из
-  переменной окружения), не текст ключа в переписке.
-- Токен просто проверяется по SHA-256 в базе: перебор бесполезен, один
-  и тот же текст ошибки на любую причину отказа — не пытайтесь
-  «различить»invalid/revoked по ответу.
+Все запросы идут на `<базовый URL>/api/v1/public/...`; `/api/v1` обёртки
+добавляют сами, если его нет в URL. Локальная инсталляция по умолчанию —
+`http://localhost:8080`.
+
+### 2.1 Первый запуск: попросите ключ у пользователя
+
+Ключ не хранится в Skill, не лежит в репозитории и не повторяется в
+переписке: агент получает его **один раз** и сохраняет в защищённое
+хранилище ОС (2.2), дальше читает оттуда.
+
+1. Проверьте, что уже настроено:
+
+   ```bash
+   scripts/df-auth.sh status                     # macOS / Linux / Git Bash
+   powershell -File scripts\df-auth.ps1 status   # Windows
+   ```
+
+2. Если ключа нет — попросите пользователя **одним сообщением**:
+
+   - базовый URL инсталляции, например `https://app.deepflow.example`
+     (локальная по умолчанию — `http://localhost:8080`);
+   - API-ключ `dfk_…` (создаётся в UI «API keys» или `POST /api/v1/apikeys`,
+     см. `references/api-schemas.md`). Для чтения достаточно `*:read`;
+     деплой и откат требуют `deployments:create` / `deployments:rollback`.
+
+3. Сохраните полученное. Ключ передаётся **только через stdin**: аргумент
+   командной строки виден в списке процессов (`ps`).
+
+   ```bash
+   printf '%s' '<api-key>' | scripts/df-auth.sh set
+   scripts/df-auth.sh url 'https://app.deepflow.example'
+   scripts/df-auth.sh test
+   ```
+   ```powershell
+   '<api-key>' | powershell -File scripts\df-auth.ps1 set
+   powershell -File scripts\df-auth.ps1 url 'https://app.deepflow.example'
+   powershell -File scripts\df-auth.ps1 test
+   ```
+
+4. Сообщите пользователю, что ключ сохранён и где, **не повторяя сам
+   ключ**. Если переписка сохраняется или шерится — предложите
+   перевыпустить ключ после настройки (хранилище перезапишется через `set`).
+
+Правила:
+
+- ключ принимается один раз, дальше берётся из хранилища;
+- никогда не печатайте и не пересказывайте ключ: ни в отчётах, ни в
+  примерах, ни в коммитах, ни через `echo`/`export` — максимум, что можно
+  показать, это маску из `df-auth.sh status`;
+- не кладите ключ в файлы репозитория, `.env`, `SKILL.md`, конфиги
+  приложения — это утечка (раздел 10);
+- **не ищите** ключ перебором мест: единственный источник — хранилище,
+  которым управляет `scripts/df-auth.sh`, и переменные окружения
+  (раздел 10).
+
+### 2.2 Где хранится ключ
+
+| ОС | Хранилище | Идентификатор |
+|---|---|---|
+| macOS | Keychain | service `deepflow-api-key`, account `$USER` |
+| Linux | Secret Service (`secret-tool` / libsecret) | service `deepflow-api-key` |
+| Windows | DPAPI под текущего пользователя | `%APPDATA%\DeepFlow\api-key.dpapi` |
+| Linux без libsecret, прочие unix | файл `0600` | `${XDG_CONFIG_HOME:-~/.config}/deepflow/api-key` |
+
+Порядок разрешения (одинаков в `df.sh` и `df.ps1`):
+`DEEPFLOW_API_KEY` → `DEEPFLOW_API_KEY_FILE` → хранилище ОС → файл `0600`.
+Переменные окружения нужны для CI и разовых запусков: они ничего не
+сохраняют.
+
+URL хранится рядом (`…/deepflow/api-url`, `%APPDATA%\DeepFlow\api-url`);
+если не задан — используется `http://localhost:8080`. Хранилище можно
+выбрать принудительно: `DEEPFLOW_KEY_STORE=file` (или `keychain`,
+`secret-service`) при вызове `df-auth.sh set`.
+
+Управление:
+
+```bash
+scripts/df-auth.sh status   # что настроено, откуда берётся ключ, маска
+scripts/df-auth.sh test     # GET /public/projects: проверка ключа и URL
+scripts/df-auth.sh rm       # удалить ключ из всех хранилищ
+```
+
+При `401` (раздел 12) ключ отозван или просрочен: попросите новый,
+повторите `set` — запись в хранилище перезапишется.
+
+### 2.3 Ограничения ключа
+
+- Ключ проверяется по SHA-256 в базе: перебор бесполезен, один и тот же
+  текст ошибки на любую причину отказа — не пытайтесь «различить»
+  invalid/revoked по ответу.
 - Ключ может быть **ограничен списком проектов**: запросы к проектам вне
   списка дают 403; список проектов при чтении фильтруется сам.
 - **Rate limit**: по умолчанию 60 запросов/мин на ключ. Превышение —
@@ -71,8 +154,8 @@ Authorization: Bearer dfk_<43 символа>
 | Один сервис | `GET /public/projects/{p}/services/{s}` (services:read) |
 | Метаданные env сервиса | `GET /public/projects/{p}/services/{s}/env` (services:read) |
 | Привязка репозитория | `GET /public/projects/{p}/services/{s}/repository` (repositories:read) |
-| Ветки репозитория | `GET /public/projects/{p}/services/{s}/repository/branches` (repositories:read) |
-| Список коммитов | `GET /public/projects/{p}/services/{s}/repository/commits` (repositories:read) |
+| Ветки репозитория | `GET /public/projects/{p}/services/{s}/repository/branches?page=&per_page=` (repositories:read) |
+| Список коммитов | `GET /public/projects/{p}/services/{s}/repository/commits?branch=&page=&per_page=` (repositories:read) |
 | Один коммит | `GET /public/projects/{p}/services/{s}/repository/commits/{sha}` (repositories:read) |
 | Релизы проекта | `GET /public/projects/{p}/releases` (deployments:read) |
 | Один релиз | `GET /public/projects/{p}/releases/{r}` (deployments:read) |
@@ -82,8 +165,10 @@ Authorization: Bearer dfk_<43 символа>
 | Диагностика | `GET /public/projects/{p}/deployments/{d}/diagnostics` (diagnostics:read) |
 | Метрики узла | `GET /public/projects/{p}/deployments/{d}/metrics` (metrics:read) |
 
-Нумерация страниц — `?page=1&per_page=50` для git-списков (границы
-ограничивает платформа).
+Нумерация страниц — `?page=1&per_page=20` для git-списков: `page`
+начинается с 1, `per_page` — 1..100 (по умолчанию 20). Ответ — обычный
+массив без метаданных: следующая страница запрашивается с `page + 1`;
+если элементов меньше `per_page`, страниц больше нет.
 
 ## 4. Диагностика (как искать проблему)
 
@@ -131,8 +216,10 @@ starting → health_check → switching_traffic → success`.
 
 - Привязка: `GET …/repository` → `{provider, repo, branch}`. Нет привязки
   → 404 (и создание деплоя такого сервиса бесполезно).
-- Ветки: `GET …/repository/branches`; коммиты: `GET …/repository/commits`
-  (страницами), один коммит: `GET …/repository/commits/{sha}`.
+- Ветки: `GET …/repository/branches?page=1&per_page=20`; коммиты:
+  `GET …/repository/commits?branch=<branch>&page=1&per_page=20` (постранично,
+  новые первыми; без `branch` — ветка из привязки), один коммит:
+  `GET …/repository/commits/{sha}`.
 - Деплой по **точному SHA** (§5.4): `commit_sha` конвейер принимает в
   формате 7–64 hex-символов (обычно 40-символьный полный SHA).
   Не деплойте «latest»/имя ветки — только SHA из списка коммитов.
@@ -147,16 +234,17 @@ starting → health_check → switching_traffic → success`.
 1. Найдите сервис и текущую проблему (раздел 4).
 2. Внесите исправление в репозиторий своими инструментами и создайте commit.
 3. Возьмите **полный SHA** нового коммита (перечислите коммиты,
-   `GET …/repository/commits`, найдите свой по message).
+   `GET …/repository/commits?page=1&per_page=20`, при необходимости
+   увеличивайте `page`, пока не найдёте свой по message).
 4. Явно спросите пользователя: «Деплоить commit `<sha-short>` на сервис
    `<name>`?» — и только после подтверждения вызывайте:
    ```
    POST /public/projects/{p}/services/{s}/deployments
-   {"commit_sha": "<40 hex>", "port": 0}
+   {"commit_sha": "<40 hex>"}
    ```
    → `202 Accepted` и тело деплоя (`id`, `status: queued`).
-   `port` — только если Analyzer просил уточнить порт (когда пользовательский
-   Dockerfile без EXPOSE; обычный деплой — без поля).
+   `port` необязателен: Analyzer определяет его сам, иначе используется
+   8080. Указывайте `port` только чтобы переопределить определённый порт.
 5. Опрашивайте `GET …/deployments/{d}` (паузы 10–15 с) до терминального
    статуса. `success` → сообщите успех; `failed` → заберите
    `error_message` + события конвейера, проанализируйте, скажите
@@ -189,6 +277,11 @@ starting → health_check → switching_traffic → success`.
 
 - Обходить любые ограничения API: перебирать токены, ротировать ключи,
   пытаться получить доступ к проектам вне списка ключа.
+- Искать API-ключ где попало: в репозитории, `.env`, БД, конфигах
+  приложения, истории чата. Единственный источник — хранилище
+  `scripts/df-auth.sh` и переменные окружения (раздел 2).
+- Печатать ключ: ни в ответах, ни в примерах команд, ни в коммитах и
+  логах; допустима только маска из `df-auth.sh status`.
 - Искать или запрашивать **значения секретов**: env-переменные с
   `is_secret: true` значений не имеют в API; не конструируйте обходов.
 - Придумывать несуществующие методы/поля API (§13 ТЗ) — используйте
@@ -209,10 +302,11 @@ starting → health_check → switching_traffic → success`.
 - Секреты для запуска платформа расшифровывает сама и напрямую в
   контейнер; публично их получить невозможно — не пытаться.
 - Не вставляйте значения несекретных env в отчёты пользователю без нужды.
-- Свои собственные материалы (токены AI-агента, учетные данные Git)
-  агент хранит вне диалога; если агент видит чужой секрет в открытой
-  информации — не используйте его и предупредите пользователя об утечке
-  в репозитории/логах.
+- Свои собственные материалы (API-ключ DeepFlow, токены AI-агента,
+  учётные данные Git) агент хранит вне диалога: ключ DeepFlow — только в
+  хранилище `scripts/df-auth.sh` (раздел 2). Если агент видит чужой секрет
+  в открытой информации — не используйте его и предупредите пользователя
+  об утечке в репозитории/логах.
 
 ## 12. Как интерпретировать ошибки API
 
@@ -221,7 +315,7 @@ starting → health_check → switching_traffic → success`.
 | Статус | Типичный `message` | Что делать |
 |---|---|---|
 | 400 | `invalid scopes: …`, `commit sha is invalid`, `invalid request`, `invalid id` | Исправить запрос (см. схему); повторить |
-| 401 | `invalid or expired api key` / `api key was revoked` / `api key expired` | Ключ неработоспособен; попросите пользователя новый |
+| 401 | `invalid or expired api key` / `api key was revoked` / `api key expired` | Ключ неработоспособен: попросите новый и сохраните через `df-auth.sh set` |
 | 402 | текст биллинга (квота/срок тарифа) | Действия тарифа: сообщите пользователю, что нужен апгрейд/продление подписки |
 | 403 | `api key lacks required scope` — отсутствует право; `api key is not allowed to access this project` — проект вне списка ключа; про plan — тариф без публичного API | Сообщите о нужном scope/проекте/тарифе; не повторяйте «наугад» |
 | 404 | `not found` — объект не существует **или не ваш** (умышленно не различается); `project not found`, `deployment not found`, `service not found` такие же | Не запрашивайте снова без изменений; скажите пользователю |
@@ -248,3 +342,38 @@ starting → health_check → switching_traffic → success`.
 
 Не вставляйте идентификаторы без контекста (пользователь не обязан
 держать их в голове): пишите «сервис `web` (id=12, проект `shop`)».
+
+## 14. CLI-обёртки: `df.sh`, `df-auth.sh`, `df.ps1`
+
+Пути в примерах указаны относительно каталога Skill (например,
+`~/.config/opencode/skills/deepflow/`) — запускайте их оттуда или
+подставляйте полный путь.
+
+Для вызовов из shell в Skill есть два слоя:
+
+- `scripts/df-auth.sh` / `scripts/df-auth.ps1` — настройка и хранилище
+  ключа (раздел 2): `set`, `url`, `status`, `test`, `rm`;
+- `scripts/df.sh` (macOS/Linux/Git Bash) и `scripts/df.ps1` (Windows) —
+  обёртки над API. Ключ и URL они берут сами: окружение → хранилище
+  `df-auth` → файл. Ключ никогда не передаётся аргументом.
+
+```bash
+# macOS / Linux / Git Bash
+scripts/df.sh GET  /public/projects
+scripts/df.sh GET  /public/projects/1/deployments/42/diagnostics
+scripts/df.sh POST /public/projects/1/services/2/deployments \
+  '{"commit_sha":"e2f3c15c1a4c0c5cfd1a10a55c1ba7e9db11e911"}'
+```
+
+```powershell
+# Windows
+powershell -File scripts\df.ps1 GET /public/projects
+powershell -File scripts\df.ps1 POST /public/projects/1/services/2/deployments '{"commit_sha":"<40 hex>"}'
+```
+
+Обе обёртки печатают тело ответа в stdout, строку `HTTP <код>` — в stderr,
+и возвращают 0 только на 2xx. Действия, требующие согласия (деплой и
+откат), без подтверждения пользователя не выполняются — см. раздел 9.
+
+Разовые вызовы без сохранения ключа (CI): задайте `DEEPFLOW_API_URL` и
+`DEEPFLOW_API_KEY` в окружении — они имеют приоритет над хранилищем.
