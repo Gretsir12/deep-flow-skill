@@ -25,7 +25,7 @@ The Skill teaches an AI agent how to work with DeepFlow through its public API:
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/refs/heads/main/install.sh | bash
 ```
 
 The installer adds the Skill to every supported global directory:
@@ -44,7 +44,7 @@ The installer adds the Skill to every supported global directory:
 | `curl -fsSL …/install.sh \| bash -s -- --project` | `./.opencode/skills/deepflow` |
 | `curl -fsSL …/install.sh \| bash -s -- --dir <path>` | `<path>/deepflow` |
 
-Replace `…` with `https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/main`
+Replace `…` with `https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/refs/heads/main`
 when copying a command.
 
 ### Manual install

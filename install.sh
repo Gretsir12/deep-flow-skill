@@ -37,8 +37,8 @@ location: ~/.config/opencode/skills, ~/.claude/skills, and ~/.agents/skills.
 Use --dir to target any other agent's skills directory.
 
 Examples:
-  curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/main/install.sh | bash
-  curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/main/install.sh | bash -s -- --project
+  curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/refs/heads/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/Gretsir12/deep-flow-skill/refs/heads/main/install.sh | bash -s -- --project
 EOF
 }
 
